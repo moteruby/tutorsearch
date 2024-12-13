@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Schedule Lessons</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/calendar.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.0/main.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.0/main.min.js"></script>
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/index.html" class="nav-link">Back to Main</a>
+        </div>
+        <div class="nav-right">
+            <span id="username"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="calendar-container">
+        <div id="calendar"></div>
+    </div>
+
+    <!-- Модальное окно для создания запроса на занятие -->
+    <div id="lessonModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Schedule a Lesson</h2>
+            <form id="lessonForm">
+                <div class="form-group">
+                    <label for="tutorSelect">Select Tutor:</label>
+                    <select id="tutorSelect" required>
+                        <option value="">Choose a tutor...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="subject">Subject:</label>
+                    <select id="subject" required>
+                        <option value="">Select subject...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="startTime">Start Time:</label>
+                    <input type="datetime-local" id="startTime" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="endTime">End Time:</label>
+                    <input type="datetime-local" id="endTime" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description (optional):</label>
+                    <textarea id="description" rows="3"></textarea>
+                </div>
+
+                <button type="submit">Send Request</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно для просмотра деталей занятия -->
+    <div id="lessonDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Lesson Details</h2>
+            <div id="lessonDetails"></div>
+            <div id="lessonActions" class="lesson-actions"></div>
+        </div>
+    </div>
+
+    <script>
+    let calendar;
+    let currentUser = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Загружаем информацию о текущем пользователе
+        fetch('/api/auth/current-user')
+            .then(response => response.json())
+            .then(user => {
+                currentUser = user;
+                document.getElementById('username').textContent = user.username;
+                initializeCalendar();
+                if (user.role === 'STUDENT') {
+                    loadTutors();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+
+        setupModals();
+    });
+
+    function initializeCalendar() {
+        const calendarEl = document.getElementById('calendar');
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            slotMinTime: '08:00:00',
+            slotMaxTime: '20:00:00',
+            selectable: currentUser.role === 'STUDENT',
+            select: function(info) {
+                if (currentUser.role === 'STUDENT') {
+                    if (info.start < new Date()) {
+                        alert('Cannot schedule lessons in the past!');
+                        return;
+                    }
+                    showLessonModal(info.start, info.end);
+                }
+            },
+            eventClick: function(info) {
+                showLessonDetails(info.event);
+            },
+            events: function(info, successCallback, failureCallback) {
+                loadLessons(info.start, info.end, successCallback);
+            }
+        });
+        calendar.render();
+    }
+
+    function loadTutors() {
+        fetch('/api/tutors')
+            .then(response => response.json())
+            .then(tutors => {
+                const tutorSelect = document.getElementById('tutorSelect');
+                tutors.forEach(tutor => {
+                    const option = document.createElement('option');
+                    option.value = tutor.id;
+                    option.textContent = tutor.username;
+                    tutorSelect.appendChild(option);
+                });
+            });
+    }
+
+    function loadTutorSubjects(tutorId) {
+        fetch(`/api/tutors/${tutorId}`)
+            .then(response => response.json())
+            .then(tutor => {
+                const subjectSelect = document.getElementById('subject');
+                subjectSelect.innerHTML = '<option value="">Select subject...</option>';
+                tutor.subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject;
+                    option.textContent = subject;
+                    subjectSelect.appendChild(option);
+                });
+            });
+    }
+
+    function loadLessons(start, end, successCallback) {
+        const endpoint = currentUser.role === 'TUTOR' 
+            ? `/api/lessons/tutor/${currentUser.id}`
+            : `/api/lessons/student/${currentUser.id}`;
+
+        // Форматируем даты для запроса
+        const formatDate = (date) => {
+            return date.toISOString().slice(0, 19); // Убираем миллисекунды и timezone
+        };
+
+        fetch(`${endpoint}?start=${formatDate(start)}&end=${formatDate(end)}`)
+            .then(response => response.json())
+            .then(lessons => {
+                const events = lessons.map(lesson => {
+                    // Преобразуем строки дат в объекты Date
+                    const startDate = new Date(lesson.startTime + 'Z'); // Добавляем Z для UTC
+                    const endDate = new Date(lesson.endTime + 'Z');
+
+                    return {
+                        id: lesson.id,
+                        title: getEventTitle(lesson),
+                        start: startDate,
+                        end: endDate,
+                        backgroundColor: getStatusColor(lesson.status),
+                        extendedProps: {
+                            ...lesson,
+                            startTime: startDate,
+                            endTime: endDate
+                        }
+                    };
+                });
+                successCallback(events);
+            })
+            .catch(error => console.error('Error loading lessons:', error));
+    }
+
+    function getEventTitle(lesson) {
+        const otherPerson = currentUser.role === 'TUTOR' ? lesson.student.username : lesson.tutor.username;
+        return `${lesson.subject} with ${otherPerson}`;
+    }
+
+    function getStatusColor(status) {
+        switch (status) {
+            case 'PENDING': return '#ffd700';
+            case 'APPROVED': return '#28a745';
+            case 'REJECTED': return '#dc3545';
+            case 'COMPLETED': return '#6c757d';
+            default: return '#007bff';
+        }
+    }
+
+    function showLessonModal(start, end) {
+        const modal = document.getElementById('lessonModal');
+        document.getElementById('startTime').value = start.toISOString().slice(0, 16);
+        document.getElementById('endTime').value = end.toISOString().slice(0, 16);
+
+        // Показываем/скрываем поле выбора репетитора в зависимости от роли
+        const tutorSelectGroup = document.getElementById('tutorSelect').closest('.form-group');
+        tutorSelectGroup.style.display = currentUser.role === 'STUDENT' ? 'block' : 'none';
+
+        modal.style.display = 'block';
+    }
+
+    function showLessonDetails(event) {
+        const lesson = event.extendedProps;
+        const modal = document.getElementById('lessonDetailsModal');
+        const detailsDiv = document.getElementById('lessonDetails');
+        const actionsDiv = document.getElementById('lessonActions');
+
+        // Форматируем даты для отображения в локальном времени
+        const formatDateTime = (date) => {
+            return new Date(date).toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+
+        detailsDiv.innerHTML = `
+            <div class="event-details">
+                <div class="event-header">
+                    <h3 class="event-title">${lesson.subject}</h3>
+                    <span class="event-status" style="background-color: ${getStatusColor(lesson.status)}">${lesson.status}</span>
+                </div>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Tutor</div>
+                        <div class="info-value">${lesson.tutor.username}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Student</div>
+                        <div class="info-value">${lesson.student.username}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Start Time</div>
+                        <div class="info-value">${formatDateTime(lesson.startTime)}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">End Time</div>
+                        <div class="info-value">${formatDateTime(lesson.endTime)}</div>
+                    </div>
+                </div>
+                ${lesson.description ? `
+                    <div class="description-section">
+                        <div class="description-label">Description</div>
+                        <div class="description-text">${lesson.description}</div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        actionsDiv.innerHTML = '';
+        
+        if (lesson.status === 'PENDING' && currentUser.role === 'TUTOR' && lesson.tutor.id === currentUser.id) {
+            actionsDiv.innerHTML = `
+                <button onclick="updateLessonStatus(${lesson.id}, 'APPROVED')" class="approve-btn">Approve</button>
+                <button onclick="updateLessonStatus(${lesson.id}, 'REJECTED')" class="reject-btn">Reject</button>
+            `;
+        }
+
+        modal.style.display = 'block';
+    }
+
+    function updateLessonStatus(lessonId, status) {
+        // Преобразуем статус в нужный формат для URL
+        const action = status === 'APPROVED' ? 'approve' : 'reject';
+        
+        fetch(`/api/lessons/${lessonId}/${action}`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to update lesson status');
+            }
+            return response.json();
+        })
+        .then(data => {
+            calendar.refetchEvents();
+            document.getElementById('lessonDetailsModal').style.display = 'none';
+            alert(`Lesson has been ${status.toLowerCase()}`);
+        })
+        .catch(error => {
+            console.error('Error updating lesson status:', error);
+            alert('Failed to update lesson status. Please try again.');
+        });
+    }
+
+    function setupModals() {
+        // Настройка закрытия модальных окон
+        document.querySelectorAll('.modal .close').forEach(closeBtn => {
+            closeBtn.onclick = function() {
+                this.closest('.modal').style.display = 'none';
+            }
+        });
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        // Обработка выбора репетитора
+        document.getElementById('tutorSelect').addEventListener('change', function(e) {
+            if (e.target.value) {
+                loadTutorSubjects(e.target.value);
+            }
+        });
+
+        // Обработка отправки формы
+        document.getElementById('lessonForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const startTime = new Date(document.getElementById('startTime').value);
+            const endTime = new Date(document.getElementById('endTime').value);
+            
+            if (startTime < new Date()) {
+                alert('Cannot schedule lessons in the past!');
+                return;
+            }
+
+            if (endTime <= startTime) {
+                alert('End time must be after start time!');
+                return;
+            }
+
+            const requestData = {
+                tutorId: document.getElementById('tutorSelect').value,
+                studentId: currentUser.id,
+                subject: document.getElementById('subject').value,
+                startTime: document.getElementById('startTime').value + ':00',
+                endTime: document.getElementById('endTime').value + ':00',
+                description: document.getElementById('description').value || ''
+            };
+
+            fetch('/api/lessons/request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || 'Failed to create lesson request');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('lessonModal').style.display = 'none';
+                calendar.refetchEvents();
+                alert('Lesson request sent successfully!');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(error.message || 'Failed to send lesson request. Please try again.');
+            });
+        });
+    }
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+    </script>
+</body>
+</html>
