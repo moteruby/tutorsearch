@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+<div class="chat-container">
+    <!-- Скрытые формы для ID -->
+    <div class="login-page" id="login-page" style="display: none;">
+        <input type="hidden" id="userId">
+        <button onclick="login()" id="loginButton" style="display: none;">Login</button>
+    </div>
+
+    <div class="chat-page" id="chat-page">
+        <div class="chat-header">
+            <h2>Chat with <span id="receiverName"></span></h2>
+            <button onclick="window.location.href='/index.html'">Back to Tutors</button>
+        </div>
+
+        <div class="message-container" id="message-area"></div>
+
+        <div class="send-message">
+            <input type="hidden" id="receiverId">
+            <input type="text" id="message" placeholder="Type a message...">
+            <button onclick="sendNewMessage()">Send</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script src="/js/chat.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const receiverId = urlParams.get('receiverId');
+    
+    if (!receiverId) {
+        console.error('No receiverId provided');
+        window.location.href = '/index.html';
+        return;
+    }
+
+    Promise.all([
+        fetch('/api/auth/current-user').then(response => {
+            if (!response.ok) {
+                throw new Error(`Current user fetch failed: ${response.status}`);
+            }
+            return response.json();
+        }),
+        fetch(`/api/users/${receiverId}`).then(response => {
+            if (!response.ok) {
+                throw new Error(`Receiver fetch failed: ${response.status}`);
+            }
+            return response.json();
+        })
+    ])
+    .then(([currentUser, receiver]) => {
+        console.log('Current user:', currentUser);
+        console.log('Receiver:', receiver);
+        
+        if (!currentUser.id || !receiver.id) {
+            throw new Error('Invalid user data received');
+        }
+        
+        document.getElementById('userId').value = currentUser.id;
+        document.getElementById('receiverId').value = receiverId;
+        document.getElementById('receiverName').textContent = receiver.username;
+        
+        try {
+            login();
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('Failed to establish chat connection. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Setup error:', error);
+        alert('Failed to load chat. Please try again later.');
+        window.location.href = '/index.html';
+    });
+});
+</script>
+</body>
+</html> 
