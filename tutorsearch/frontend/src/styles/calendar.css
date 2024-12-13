@@ -1,0 +1,63 @@
+.fc {
+  height: calc(100vh - 200px);
+}
+
+.fc-event {
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.fc-event-title {
+  font-weight: bold;
+}
+
+.fc-toolbar-title {
+  font-size: 1.5em !important;
+}
+
+.fc-button {
+  background-color: #007bff !important;
+  border-color: #007bff !important;
+}
+
+.fc-button:hover {
+  background-color: #0056b3 !important;
+  border-color: #0056b3 !important;
+}
+
+.fc-button:disabled {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+}
+
+.fc-timegrid-slot {
+  height: 40px !important;
+}
+
+.fc-timegrid-slot-label {
+  font-size: 0.85em;
+}
+
+.fc-day-today {
+  background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+.fc-event.pending {
+  background-color: #007bff;
+  border-color: #0056b3;
+}
+
+.fc-event.approved {
+  background-color: #28a745;
+  border-color: #1e7e34;
+}
+
+.fc-event.rejected {
+  background-color: #dc3545;
+  border-color: #bd2130;
+}
+
+.fc-event.completed {
+  background-color: #6c757d;
+  border-color: #545b62;
+} 
