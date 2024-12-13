@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Chats</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/index.html" class="nav-link">Back to Main</a>
+        </div>
+        <div class="nav-right">
+            <span id="username"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="chats-container">
+        <h2>My Chats</h2>
+        <div id="chatsList">
+            <!-- Чаты будут загружены сюда -->
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Получаем информацию о текущем пользователе
+        fetch('/api/auth/current-user')
+            .then(response => response.json())
+            .then(user => {
+                document.getElementById('username').textContent = user.username;
+                loadChats(user.id);
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    function loadChats(userId) {
+        fetch(`/api/chat/list/${userId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(chats => {
+                const chatsList = document.getElementById('chatsList');
+                if (!Array.isArray(chats) || chats.length === 0) {
+                    chatsList.innerHTML = '<div class="no-chats">No chats yet</div>';
+                    return;
+                }
+
+                chatsList.innerHTML = '';
+                chats.forEach(chat => {
+                    if (chat && chat.userId) {  // Проверяем, что чат существует и имеет userId
+                        const chatElement = createChatElement(chat);
+                        chatsList.appendChild(chatElement);
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error loading chats:', error);
+                const chatsList = document.getElementById('chatsList');
+                chatsList.innerHTML = '<div class="error-message">Failed to load chats. Please try again later.</div>';
+            });
+    }
+
+    function createChatElement(chat) {
+        const div = document.createElement('div');
+        div.className = 'chat-item';
+        const time = chat.lastMessageTime ? new Date(chat.lastMessageTime).toLocaleString() : '';
+        
+        div.innerHTML = `
+            <div class="chat-info">
+                <img src="${chat.imageUrl || '/images/default-avatar.png'}" alt="User avatar">
+                <div class="chat-details">
+                    <h3>${chat.username || 'Unknown User'}</h3>
+                    <p class="last-message">${chat.lastMessage || 'No messages yet'}</p>
+                    <span class="time">${time}</span>
+                </div>
+            </div>
+            <button onclick="window.location.href='/chat.html?receiverId=${chat.userId}'">
+                Open Chat
+            </button>
+        `;
+        return div;
+    }
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+    </script>
+</body>
+</html> 

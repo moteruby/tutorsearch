@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Chats</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/index.html" class="nav-link">Back to Main</a>
+            <a href="/calendar.html" class="nav-link">Schedule</a>
+        </div>
+        <div class="nav-right">
+            <span id="username"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="chats-container">
+        <h2>My Chats</h2>
+        <div id="chatsList">
+            <!-- Чаты будут загружены сюда -->
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/auth/current-user')
+            .then(response => response.json())
+            .then(user => {
+                console.log('Current user:', user);
+                document.getElementById('username').textContent = user.username;
+                
+                // Сначала проверим тестовый эндпоинт
+                fetch(`/api/chat/test/${user.id}`)
+                    .then(response => response.text())
+                    .then(result => {
+                        console.log('Test endpoint response:', result);
+                        // Если тест прошел успешно, загружаем чаты
+                        loadChats(user.id);
+                    })
+                    .catch(error => {
+                        console.error('Test endpoint error:', error);
+                    });
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    function loadChats(userId) {
+        console.log('Loading chats for user ID:', userId);
+        
+        // Добавим вывод полного URL для проверки
+        const url = `/api/chat/chats/${userId}`;
+        console.log('Fetching URL:', url);
+        
+        fetch(url)
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(chats => {
+                console.log('Received chats:', chats);
+                const container = document.getElementById('chatsList');
+                container.innerHTML = '';
+                
+                if (!chats || chats.length === 0) {
+                    console.log('No chats found');
+                    container.innerHTML = '<p class="no-chats">No active chats</p>';
+                    return;
+                }
+
+                chats.forEach(chat => {
+                    console.log('Processing chat:', chat);
+                    const chatElement = createChatElement(chat);
+                    container.appendChild(chatElement);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading chats:', error);
+                const container = document.getElementById('chatsList');
+                container.innerHTML = `<p class="error-message">Error loading chats: ${error.message}</p>`;
+            });
+    }
+
+    function createChatElement(chat) {
+        console.log('Creating element for chat:', chat);
+        const div = document.createElement('div');
+        div.className = 'chat-item';
+        const time = new Date(chat.lastMessageTime).toLocaleString();
+        
+        div.innerHTML = `
+            <div class="chat-info">
+                <img src="${chat.imageUrl || '/images/default-avatar.png'}" alt="User avatar">
+                <div class="chat-details">
+                    <h3>${chat.username}</h3>
+                    <p class="last-message">${chat.lastMessage}</p>
+                    <span class="time">${time}</span>
+                </div>
+            </div>
+            <button onclick="window.location.href='/chat.html?receiverId=${chat.userId}'">
+                Open Chat
+            </button>
+        `;
+        return div;
+    }
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+    </script>
+</body>
+</html> 
