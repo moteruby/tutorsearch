@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Profile</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/profile.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/index.html" class="nav-link">Back to Main</a>
+        </div>
+        <div class="nav-right">
+            <span id="usernameDisplay"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="profile-container">
+        <h2>Edit Profile</h2>
+        <form id="profileForm">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">New Password (leave empty to keep current):</label>
+                <input type="password" id="password" name="password">
+            </div>
+
+            <div class="form-group">
+                <label for="profileImage">Profile Image:</label>
+                <input type="file" id="profileImage" name="profileImage" accept="image/*">
+                <img id="currentImage" src="" alt="Current profile image" style="display: none; max-width: 200px; margin-top: 10px;">
+            </div>
+
+            <!-- Поля только для репетиторов -->
+            <div id="tutorFields" style="display: none;">
+                <div class="form-group">
+                    <label for="description">Description:</label>
+                    <textarea id="description" name="description" rows="4"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="hourlyRate">Hourly Rate ($):</label>
+                    <input type="number" id="hourlyRate" name="hourlyRate" min="0" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label for="subjects">Subjects (separate with commas):</label>
+                    <input type="text" id="subjects" name="subjects" placeholder="Math, Physics, Chemistry">
+                </div>
+            </div>
+
+            <button type="submit">Save Changes</button>
+        </form>
+    </div>
+
+    <script>
+    let currentUser = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadProfile();
+
+        // Предпросмотр загруженного изображения
+        document.getElementById('profileImage').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('currentImage');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    });
+
+    function loadProfile() {
+        fetch('/api/profile/current')
+            .then(response => response.json())
+            .then(user => {
+                currentUser = user;
+                document.getElementById('username').value = user.username || '';
+                document.getElementById('usernameDisplay').textContent = user.username || '';
+                document.getElementById('email').value = user.email || '';
+                
+                if (user.imageUrl) {
+                    const img = document.getElementById('currentImage');
+                    img.src = user.imageUrl;
+                    img.style.display = 'block';
+                }
+
+                if (user.role === 'TUTOR') {
+                    document.getElementById('tutorFields').style.display = 'block';
+                    document.getElementById('description').value = user.description || '';
+                    document.getElementById('hourlyRate').value = user.hourlyRate || '';
+                    document.getElementById('subjects').value = user.subjects ? user.subjects.join(', ') : '';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    document.getElementById('profileForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData();
+        formData.append('username', document.getElementById('username').value);
+        formData.append('email', document.getElementById('email').value);
+
+        const password = document.getElementById('password').value;
+        if (password) {
+            formData.append('password', password);
+        }
+
+        const profileImage = document.getElementById('profileImage').files[0];
+        if (profileImage) {
+            formData.append('profileImage', profileImage);
+        }
+
+        if (currentUser.role === 'TUTOR') {
+            formData.append('description', document.getElementById('description').value);
+            formData.append('hourlyRate', document.getElementById('hourlyRate').value);
+            formData.append('subjects', document.getElementById('subjects').value);
+        }
+
+        try {
+            const response = await fetch('/api/profile/update', {
+                method: 'PUT',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to update profile');
+            }
+
+            const data = await response.json();
+            alert('Profile updated successfully!');
+            loadProfile();
+        } catch (error) {
+            console.error('Error:', error);
+            alert(error.message || 'Failed to update profile. Please try again.');
+        }
+    });
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+    </script>
+</body>
+</html> 
