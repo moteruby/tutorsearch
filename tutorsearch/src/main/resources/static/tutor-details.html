@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tutor Profile</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/tutor-details.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/index.html" class="nav-link">Back to Tutors</a>
+        </div>
+        <div class="nav-right">
+            <span id="username"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="tutor-profile">
+        <div class="profile-header">
+            <div class="profile-image">
+                <img id="tutorImage" src="/images/default-avatar.png" alt="Tutor photo">
+            </div>
+            <div class="profile-info">
+                <h1 id="tutorName"></h1>
+                <div class="rating-container">
+                    <span class="rating" id="tutorRating"></span>
+                    <span class="review-count" id="reviewCount"></span>
+                </div>
+                <div class="hourly-rate" id="hourlyRate"></div>
+            </div>
+            <div class="action-buttons">
+                <button onclick="startChat()" class="primary-btn">Chat with Tutor</button>
+                <button onclick="showLessonForm()" class="schedule-btn">Schedule Lesson</button>
+            </div>
+        </div>
+
+        <div class="profile-content">
+            <div class="section">
+                <h2>About</h2>
+                <p id="tutorDescription"></p>
+            </div>
+
+            <div class="section">
+                <h2>Subjects</h2>
+                <div class="subjects-list" id="subjectsList"></div>
+            </div>
+
+            <div class="section">
+                <h2>Reviews</h2>
+                <div id="reviewFormSection">
+                    <!-- Форма будет добавлена динамически -->
+                </div>
+                <div class="reviews-container" id="reviewsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lessonModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLessonModal()">&times;</span>
+            <h2>Schedule a Lesson</h2>
+            <form id="lessonForm" onsubmit="submitLessonRequest(event)">
+                <div class="form-group">
+                    <label for="subject">Subject:</label>
+                    <select id="subject" required>
+                        <!-- Будет заполнено динамически из предметов репетитора -->
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="startTime">Start Time:</label>
+                    <input type="datetime-local" id="startTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="endTime">End Time:</label>
+                    <input type="datetime-local" id="endTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">Description (optional):</label>
+                    <textarea id="description" rows="3"></textarea>
+                </div>
+                
+                <button type="submit" class="submit-btn">Send Request</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    let tutorId = null;
+    let currentUser = null;
+    let currentUserReview = null;
+    let currentTutorSubjects = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        tutorId = urlParams.get('id');
+        
+        if (!tutorId) {
+            window.location.href = '/index.html';
+            return;
+        }
+
+        // Загружаем информацию о текущем пользователе
+        fetch('/api/auth/current-user')
+            .then(response => response.json())
+            .then(user => {
+                currentUser = user;
+                document.getElementById('username').textContent = user.username;
+                if (user.role === 'STUDENT') {
+                    setupReviewForm();
+                }
+            });
+
+        loadTutorDetails();
+    });
+
+    function setupReviewForm() {
+        const reviewFormSection = document.getElementById('reviewFormSection');
+        reviewFormSection.innerHTML = `
+            <div class="review-form">
+                <h3>${currentUserReview ? 'Edit Your Review' : 'Write a Review'}</h3>
+                <div class="rating-input">
+                    <span>Rating:</span>
+                    <div class="stars">
+                        ${[1, 2, 3, 4, 5].map(num => `
+                            <span class="star ${currentUserReview && currentUserReview.rating >= num ? 'active' : ''}" 
+                                  data-rating="${num}">★</span>
+                        `).join('')}
+                    </div>
+                </div>
+                <textarea id="reviewText" placeholder="Write your review here...">${currentUserReview ? currentUserReview.text : ''}</textarea>
+                <button onclick="submitReview()" class="submit-review-btn">
+                    ${currentUserReview ? 'Update Review' : 'Submit Review'}
+                </button>
+                ${currentUserReview ? '<button onclick="deleteReview()" class="delete-review-btn">Delete Review</button>' : ''}
+            </div>
+        `;
+
+        // Добавляем обработчики для звезд рейтинга
+        document.querySelectorAll('.star').forEach(star => {
+            star.addEventListener('click', function() {
+                const rating = this.dataset.rating;
+                document.querySelectorAll('.star').forEach(s => {
+                    s.classList.toggle('active', s.dataset.rating <= rating);
+                });
+            });
+        });
+    }
+
+    function submitReview() {
+        const rating = document.querySelectorAll('.star.active').length;
+        const text = document.getElementById('reviewText').value;
+
+        if (!rating) {
+            alert('Please select a rating');
+            return;
+        }
+
+        if (!text.trim()) {
+            alert('Please write a review');
+            return;
+        }
+
+        const reviewData = {
+            tutorId: tutorId,
+            studentId: currentUser.id,
+            rating: rating,
+            text: text
+        };
+
+        const method = currentUserReview ? 'PUT' : 'POST';
+        const url = currentUserReview ? 
+            `/api/reviews/${currentUserReview.id}` : 
+            '/api/reviews';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(reviewData)
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to submit review');
+            return response.json();
+        })
+        .then(() => {
+            loadTutorDetails();
+            alert(currentUserReview ? 'Review updated successfully' : 'Review submitted successfully');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to submit review');
+        });
+    }
+
+    function deleteReview() {
+        if (!currentUserReview || !confirm('Are you sure you want to delete your review?')) {
+            return;
+        }
+
+        fetch(`/api/reviews/${currentUserReview.id}`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to delete review');
+            currentUserReview = null;
+            loadTutorDetails();
+            alert('Review deleted successfully');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to delete review');
+        });
+    }
+
+    function loadTutorDetails() {
+        fetch(`/api/tutors/${tutorId}`)
+            .then(response => response.json())
+            .then(tutor => {
+                document.title = `${tutor.username} - Tutor Profile`;
+                
+                // Основная информация
+                document.getElementById('tutorImage').src = tutor.imageUrl || '/images/default-avatar.png';
+                document.getElementById('tutorName').textContent = tutor.username;
+                document.getElementById('tutorRating').innerHTML = `${tutor.averageRating.toFixed(1)} ⭐`;
+                document.getElementById('reviewCount').textContent = 
+                    `(${tutor.reviews ? tutor.reviews.length : 0} reviews)`;
+                document.getElementById('hourlyRate').textContent = 
+                    tutor.hourlyRate ? `$${tutor.hourlyRate}/hour` : 'Rate not specified';
+                
+                // Описание
+                document.getElementById('tutorDescription').textContent = 
+                    tutor.description || 'No description available';
+                
+                // Предметы
+                const subjectsList = document.getElementById('subjectsList');
+                subjectsList.innerHTML = tutor.subjects
+                    .map(subject => `<span class="subject-tag">${subject}</span>`)
+                    .join('');
+                
+                // Отзывы
+                const reviewsContainer = document.getElementById('reviewsContainer');
+                if (tutor.reviews && tutor.reviews.length > 0) {
+                    // Находим отзыв текущего пользователя
+                    if (currentUser) {
+                        currentUserReview = tutor.reviews.find(review => 
+                            review.studentId === currentUser.id
+                        );
+                        if (currentUser.role === 'STUDENT') {
+                            setupReviewForm();
+                        }
+                    }
+
+                    reviewsContainer.innerHTML = tutor.reviews
+                        .map(review => `
+                            <div class="review ${review.studentId === currentUser?.id ? 'my-review' : ''}">
+                                <div class="review-header">
+                                    <span class="review-author">${review.studentName}</span>
+                                    <span class="review-rating">${'⭐'.repeat(review.rating)}</span>
+                                    <span class="review-date">${new Date(review.date).toLocaleDateString()}</span>
+                                </div>
+                                <p class="review-text">${review.text}</p>
+                            </div>
+                        `)
+                        .join('');
+                } else {
+                    reviewsContainer.innerHTML = '<p class="no-reviews">No reviews yet</p>';
+                }
+
+                // Сохраняем предметы для использования в форме
+                currentTutorSubjects = tutor.subjects;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to load tutor details');
+            });
+    }
+
+    function startChat() {
+        window.location.href = `/chat.html?receiverId=${tutorId}`;
+    }
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+
+    function showLessonForm() {
+        const modal = document.getElementById('lessonModal');
+        const subjectSelect = document.getElementById('subject');
+        
+        // Очищаем и заполняем список предметов
+        subjectSelect.innerHTML = '';
+        currentTutorSubjects.forEach(subject => {
+            const option = document.createElement('option');
+            option.value = subject;
+            option.textContent = subject;
+            subjectSelect.appendChild(option);
+        });
+        
+        // Устанавливаем минимальное время
+        const now = new Date();
+        const minDateTime = now.toISOString().slice(0, 16);
+        document.getElementById('startTime').min = minDateTime;
+        document.getElementById('endTime').min = minDateTime;
+        
+        modal.style.display = 'block';
+    }
+
+    function closeLessonModal() {
+        document.getElementById('lessonModal').style.display = 'none';
+    }
+
+    function submitLessonRequest(event) {
+        event.preventDefault();
+        
+        const startTime = new Date(document.getElementById('startTime').value);
+        const endTime = new Date(document.getElementById('endTime').value);
+        
+        if (startTime < new Date()) {
+            alert('Cannot schedule lessons in the past!');
+            return;
+        }
+
+        if (endTime <= startTime) {
+            alert('End time must be after start time!');
+            return;
+        }
+
+        // Форматируем даты в ISO формат без временной зоны
+        const formatDate = (date) => {
+            return date.toISOString().slice(0, 19); // Берем только дату и время без миллисекунд и зоны
+        };
+
+        const requestData = {
+            tutorId: tutorId,
+            studentId: currentUser.id,
+            subject: document.getElementById('subject').value,
+            startTime: formatDate(startTime),
+            endTime: formatDate(endTime),
+            description: document.getElementById('description').value || ''
+        };
+
+        fetch('/api/lessons/request', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(text || 'Failed to create lesson request');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            alert('Lesson request sent successfully!');
+            window.location.href = '/calendar.html'; // Перенаправляем на календарь после успешной отправки
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(error.message || 'Failed to send lesson request. Please try again.');
+        });
+    }
+
+    // Закрытие модального окна при клике вне его
+    window.onclick = function(event) {
+        const modal = document.getElementById('lessonModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    }
+    </script>
+</body>
+</html>

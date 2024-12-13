@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tutors</title>
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left">
+            <a href="/calendar.html" class="nav-link">Schedule Lessons</a>
+        </div>
+        <div class="nav-right">
+            <span id="username"></span>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div id="tutorChatsSection" style="display: none;">
+        <h2>My Chats</h2>
+        <div class="chats-container" id="chatsContainer">
+            <!-- Здесь будут отображаться чаты -->
+        </div>
+    </div>
+
+    <div class="search-filters">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search by name or description...">
+        </div>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label for="subjectFilter">Subject:</label>
+                <input type="text" id="subjectFilter" placeholder="Enter subject">
+            </div>
+            
+            <div class="filter-group">
+                <label for="maxRate">Max Hourly Rate ($):</label>
+                <input type="number" id="maxRate" min="0" step="0.01">
+            </div>
+            
+            <div class="filter-group">
+                <label for="minRating">Min Rating:</label>
+                <select id="minRating">
+                    <option value="">Any</option>
+                    <option value="4.5">4.5+</option>
+                    <option value="4">4.0+</option>
+                    <option value="3.5">3.5+</option>
+                    <option value="3">3.0+</option>
+                </select>
+            </div>
+            
+            <button onclick="applyFilters()">Apply Filters</button>
+            <button onclick="resetFilters()" class="reset-btn">Reset</button>
+        </div>
+    </div>
+
+    <div class="tutors-container" id="tutorsContainer">
+        <!-- Здесь будут карточки репетиторов -->
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/auth/current-user')
+            .then(response => response.json())
+            .then(user => {
+                document.getElementById('username').textContent = user.username;
+                
+                const navLeft = document.querySelector('.nav-left');
+                
+                const chatsLink = document.createElement('a');
+                chatsLink.href = '/my-chats.html';
+                chatsLink.className = 'nav-link';
+                chatsLink.textContent = 'My Chats';
+                navLeft.appendChild(chatsLink);
+
+                const profileLink = document.createElement('a');
+                profileLink.href = '/profile.html';
+                profileLink.className = 'nav-link';
+                profileLink.textContent = 'Edit Profile';
+                navLeft.appendChild(profileLink);
+
+                if (user.role === 'ROLE_ADMIN') {
+                    const adminLink = document.createElement('a');
+                    adminLink.href = '/admin/dashboard.html';
+                    adminLink.className = 'nav-link';
+                    adminLink.textContent = 'Admin Panel';
+                    navLeft.appendChild(adminLink);
+                }
+
+                loadTutors();
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+    function loadChats(userId) {
+        fetch(`/api/chat/chats/${userId}`)
+            .then(response => response.json())
+            .then(chats => {
+                const container = document.getElementById('chatsContainer');
+                container.innerHTML = '';
+                chats.forEach(chat => {
+                    const chatElement = createChatElement(chat);
+                    container.appendChild(chatElement);
+                });
+            })
+            .catch(error => console.error('Error loading chats:', error));
+    }
+
+    function createChatElement(chat) {
+        const div = document.createElement('div');
+        div.className = 'chat-item';
+        const time = new Date(chat.lastMessageTime).toLocaleString();
+        div.innerHTML = `
+            <div class="chat-info">
+                <img src="${chat.imageUrl || '/images/default-avatar.png'}" alt="User avatar">
+                <div class="chat-details">
+                    <h3>${chat.username}</h3>
+                    <p class="last-message">${chat.lastMessage}</p>
+                    <span class="time">${time}</span>
+                </div>
+            </div>
+            <button onclick="window.location.href='/chat.html?receiverId=${chat.userId}'">
+                Open Chat
+            </button>
+        `;
+        return div;
+    }
+
+    function loadTutors() {
+        const searchParams = new URLSearchParams();
+        
+        const search = document.getElementById('searchInput').value;
+        const subject = document.getElementById('subjectFilter').value;
+        const maxRate = document.getElementById('maxRate').value;
+        const minRating = document.getElementById('minRating').value;
+        
+        if (search) searchParams.append('search', search);
+        if (subject) searchParams.append('subject', subject);
+        if (maxRate) searchParams.append('maxHourlyRate', maxRate);
+        if (minRating) searchParams.append('minRating', minRating);
+        
+        fetch('/api/tutors?' + searchParams.toString())
+            .then(response => response.json())
+            .then(tutors => {
+                const container = document.getElementById('tutorsContainer');
+                container.innerHTML = '';
+                
+                if (tutors.length === 0) {
+                    container.innerHTML = '<div class="no-results">No tutors found matching your criteria</div>';
+                    return;
+                }
+                
+                tutors.forEach(tutor => {
+                    const card = createTutorCard(tutor);
+                    container.appendChild(card);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function createTutorCard(tutor) {
+        const card = document.createElement('div');
+        card.className = 'tutor-card';
+        card.innerHTML = `
+            <img src="${tutor.imageUrl || '/images/default-avatar.png'}" alt="Tutor photo">
+            <h3>${tutor.username}</h3>
+            <p>${tutor.description || 'No description available'}</p>
+            <div class="subjects">
+                ${tutor.subjects.map(subject => `<span class="subject-tag">${subject}</span>`).join('')}
+            </div>
+            <div class="rating">Rating: ${tutor.averageRating.toFixed(1)} ⭐</div>
+            <div class="tutor-actions">
+                <button onclick="window.location.href='/tutor-details.html?id=${tutor.id}'" class="details-btn">Details</button>
+                <button onclick="window.location.href='/chat.html?receiverId=${tutor.id}'" class="chat-btn">Chat</button>
+            </div>
+        `;
+        return card;
+    }
+
+    function logout() {
+        fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+        .then(() => {
+            window.location.href = '/login.html';
+        });
+    }
+
+    function applyFilters() {
+        loadTutors();
+    }
+
+    function resetFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('subjectFilter').value = '';
+        document.getElementById('maxRate').value = '';
+        document.getElementById('minRating').value = '';
+        loadTutors();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', debounce(loadTutors, 500));
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    </script>
+</body>
+</html>

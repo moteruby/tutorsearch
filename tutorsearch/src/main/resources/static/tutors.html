@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tutors</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<div class="container">
+    <h1>Our Tutors</h1>
+    <div class="tutors-container" id="tutorsList">
+        <!-- Tutors will be loaded here -->
+    </div>
+</div>
+
+<script>
+    fetch('/api/tutors')
+        .then(response => response.json())
+        .then(tutors => {
+            const tutorsList = document.getElementById('tutorsList');
+            tutors.forEach(tutor => {
+                const card = document.createElement('div');
+                card.className = 'tutor-card';
+                card.innerHTML = `
+                        <img src="${tutor.imageUrl || '/images/default-avatar.png'}" alt="Tutor photo">
+                        <div class="tutor-info">
+                            <h2>${tutor.username}</h2>
+                            <p class="subjects">Subjects: ${tutor.subjects.join(', ')}</p>
+                            <p class="rating">Rating: ${tutor.averageRating ? tutor.averageRating.toFixed(1) : 'No ratings yet'}</p>
+                            <a href="/tutor-details.html?id=${tutor.id}" class="details-button">View Details</a>
+                        </div>
+                    `;
+                tutorsList.appendChild(card);
+            });
+        })
+        .catch(error => console.error('Error:', error));
+</script>
+</body>
+</html>

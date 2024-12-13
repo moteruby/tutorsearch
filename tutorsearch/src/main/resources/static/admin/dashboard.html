@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>Admin Dashboard</h1>
+            <nav>
+                <button onclick="showUsers()">Users</button>
+                <button onclick="window.location.href='/admin/register-admin.html'">Add Admin</button>
+                <button onclick="logout()">Logout</button>
+            </nav>
+        </header>
+
+        <main class="admin-content">
+            <div class="users-section">
+                <h2>Users Management</h2>
+                <div class="filters">
+                    <select id="roleFilter">
+                        <option value="">All Roles</option>
+                        <option value="STUDENT">Students</option>
+                        <option value="TUTOR">Tutors</option>
+                        <option value="ADMIN">Admins</option>
+                    </select>
+                    <input type="text" id="searchInput" placeholder="Search users...">
+                </div>
+                <table id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Users will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Edit User</h2>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUsername">Username:</label>
+                    <input type="text" id="editUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="editEmail">Email:</label>
+                    <input type="email" id="editEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="editRole">Role:</label>
+                    <select id="editRole" required>
+                        <option value="ROLE_STUDENT">Student</option>
+                        <option value="ROLE_TUTOR">Tutor</option>
+                        <option value="ROLE_ADMIN">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editPassword">New Password (leave empty to keep current):</label>
+                    <input type="password" id="editPassword">
+                </div>
+                <button type="submit">Save Changes</button>
+            </form>
+        </div>
+    </div>
+    <script src="/js/admin/dashboard.js"></script>
+</body>
+</html> 
